@@ -25,6 +25,10 @@ class GameEngine:
         self.cam_y=0
         self.lava_y=GROUND_Y+60
         self.lava_rise=0.4
+        self.base_rise = 0.4
+        self.surge_rise = 1.8
+        self.surge_timer = 0
+        self.surge_active = False
         self.score=0
         self.game_over=False
         self.won=False
@@ -43,8 +47,20 @@ class GameEngine:
         self.player.update(keys,self.platforms,WIDTH)
         target=self.player.rect.centery-HEIGHT//2
         if target<self.cam_y: self.cam_y=target
-        self.lava_y-=self.lava_rise
-        self.lava_rise=min(1.2,self.lava_rise+0.0003)
+        self.lava_y -= self.lava_rise
+        if not self.surge_active:
+            self.lava_rise = min(1.2, self.lava_rise + 0.0003)
+            self.surge_timer += 1
+            if self.surge_timer >= 900:
+                self.surge_active = True
+                self.surge_timer = 0
+        else:
+            self.lava_rise = self.surge_rise
+            self.surge_timer += 1
+            if self.surge_timer >= 90:
+                self.surge_active = False
+                self.surge_timer = 0
+                self.lava_rise = self.base_rise
         self.score=max(0,(GROUND_Y-self.player.rect.y)//10)
         self.frame+=1
         for p in self.platforms:
@@ -77,6 +93,23 @@ class GameEngine:
         draw_lava(self.screen,self.lava_y,self.cam_y,WIDTH,HEIGHT,self.frame)
         sc=self.font.render(f"Height: {self.score}m  R=Restart",True,(220,200,180))
         self.screen.blit(sc,(8,10))
+        # Danger meter
+        danger = min(1.0, self.lava_rise / 1.2)
+        bar_w = 200
+        bar_h = 14
+        bar_x, bar_y = 8, 34
+        fill_w = int(bar_w * danger)
+        danger_color = (255 - int(255 * danger), int(255 * danger), 0)
+        if self.surge_active:
+            danger_color = (255, 0, 0)
+        pygame.draw.rect(self.screen, (60, 60, 60), (bar_x, bar_y, bar_w, bar_h))
+        pygame.draw.rect(self.screen, danger_color, (bar_x, bar_y, fill_w, bar_h))
+        pygame.draw.rect(self.screen, (200, 200, 200), (bar_x, bar_y, bar_w, bar_h), 1)
+        dm = self.font.render("DANGER", True, (200, 200, 200))
+        self.screen.blit(dm, (bar_x + bar_w + 8, bar_y - 2))
+        if self.surge_active:
+            sm = self.font.render("LAVA SURGE!", True, (255, 50, 50))
+            self.screen.blit(sm, (WIDTH // 2 - sm.get_width() // 2, 8))
         if self.game_over:
             self._msg("LAVA GOT YOU!",(220,80,40))
         if self.won:
