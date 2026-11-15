@@ -1,4 +1,5 @@
 import pygame
+from game.world import PLATFORM_SPRING, PLATFORM_CRUMBLING, SPRING_BOOST, CRUMBLE_TIME
 
 SPEED = 4
 
@@ -25,8 +26,13 @@ class Player:
         for p in platforms:
             if self.rect.colliderect(p) and self.vel_y > 0 and prev_bottom <= p.top:
                 self.rect.bottom = p.top
-                self.vel_y = 0
                 self.on_ground = True
+                if p.type == PLATFORM_SPRING:
+                    self.vel_y = SPRING_BOOST
+                else:
+                    self.vel_y = 0
+                if p.type == PLATFORM_CRUMBLING:
+                    p.crumble_timer = CRUMBLE_TIME
 
     def draw(self, screen, cam_y):
         dr = self.rect.move(0, -int(cam_y))

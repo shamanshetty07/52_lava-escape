@@ -1,6 +1,8 @@
 import pygame
 from game.player import Player
-from game.world import generate_platforms, draw_lava, PLATFORM_COLOR
+from game.world import (generate_platforms, draw_lava, PLATFORM_COLOR,
+                        PLATFORM_COLOR_CRUMBLING, PLATFORM_COLOR_SPRING,
+                        PLATFORM_CRUMBLING, PLATFORM_SPRING)
 
 WIDTH,HEIGHT=500,640
 FPS=60
@@ -45,6 +47,12 @@ class GameEngine:
         self.lava_rise=min(1.2,self.lava_rise+0.0003)
         self.score=max(0,(GROUND_Y-self.player.rect.y)//10)
         self.frame+=1
+        for p in self.platforms:
+            if p.type == PLATFORM_CRUMBLING and p.crumble_timer > 0:
+                p.crumble_timer -= 1
+                if p.crumble_timer <= 0:
+                    p.active = False
+        self.platforms = [p for p in self.platforms if p.active]
         if self.player.rect.bottom>=self.lava_y:
             self.game_over=True
         if self.player.rect.top<=self.top_y-20:
@@ -53,8 +61,18 @@ class GameEngine:
     def draw(self):
         self.screen.fill(BG)
         for p in self.platforms:
-            dr=p.move(0,-int(self.cam_y))
-            pygame.draw.rect(self.screen,PLATFORM_COLOR,dr,border_radius=4)
+            dr = p.move(0, -int(self.cam_y))
+            if p.type == PLATFORM_CRUMBLING:
+                shake = 0
+                if p.crumble_timer > 0:
+                    shake = (p.crumble_timer % 4) - 2
+                dr = dr.move(shake, 0)
+                color = PLATFORM_COLOR_CRUMBLING
+            elif p.type == PLATFORM_SPRING:
+                color = PLATFORM_COLOR_SPRING
+            else:
+                color = PLATFORM_COLOR
+            pygame.draw.rect(self.screen, color, dr, border_radius=4)
         self.player.draw(self.screen,self.cam_y)
         draw_lava(self.screen,self.lava_y,self.cam_y,WIDTH,HEIGHT,self.frame)
         sc=self.font.render(f"Height: {self.score}m  R=Restart",True,(220,200,180))
