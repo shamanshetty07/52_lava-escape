@@ -1,0 +1,135 @@
+import pygame
+from game.player import Player
+from game.world import (generate_platforms, draw_lava, PLATFORM_COLOR,
+                        PLATFORM_COLOR_CRUMBLING, PLATFORM_COLOR_SPRING,
+                        PLATFORM_CRUMBLING, PLATFORM_SPRING)
+
+WIDTH,HEIGHT=500,640
+FPS=60
+BG=(20,15,30)
+GROUND_Y=HEIGHT+200
+
+class GameEngine:
+    def __init__(self):
+        pygame.init()
+        self.screen=pygame.display.set_mode((WIDTH,HEIGHT))
+        pygame.display.set_caption("Lava Escape")
+        self.clock=pygame.time.Clock()
+        self.font=pygame.font.SysFont("monospace",24,bold=True)
+        self.big_font=pygame.font.SysFont("monospace",42,bold=True)
+        self.reset()
+
+    def reset(self):
+        self.platforms=generate_platforms(WIDTH,GROUND_Y)
+        self.player=Player(WIDTH//2-16,GROUND_Y-50)
+        self.cam_y=0
+        self.lava_y=GROUND_Y+60
+        self.lava_rise=0.4
+        self.base_rise = 0.4
+        self.surge_rise = 1.8
+        self.surge_timer = 0
+        self.surge_active = False
+        self.score=0
+        self.game_over=False
+        self.won=False
+        self.top_y=self.platforms[-1].y
+        self.frame=0
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type==pygame.QUIT: return False
+            if event.type==pygame.KEYDOWN and event.key==pygame.K_r: self.reset()
+        return True
+
+    def update(self):
+        if self.game_over or self.won: return
+        keys=pygame.key.get_pressed()
+        self.player.update(keys,self.platforms,WIDTH)
+        target=self.player.rect.centery-HEIGHT//2
+        if target<self.cam_y: self.cam_y=target
+        self.lava_y -= self.lava_rise
+        if not self.surge_active:
+            self.lava_rise = min(1.2, self.lava_rise + 0.0003)
+            self.surge_timer += 1
+            if self.surge_timer >= 900:
+                self.surge_active = True
+                self.surge_timer = 0
+        else:
+            self.lava_rise = self.surge_rise
+            self.surge_timer += 1
+            if self.surge_timer >= 90:
+                self.surge_active = False
+                self.surge_timer = 0
+                self.lava_rise = self.base_rise
+        self.score=max(0,(GROUND_Y-self.player.rect.y)//10)
+        self.frame+=1
+        for p in self.platforms:
+            if p.type == PLATFORM_CRUMBLING and p.crumble_timer > 0:
+                p.crumble_timer -= 1
+                if p.crumble_timer <= 0:
+                    p.active = False
+        self.platforms = [p for p in self.platforms if p.active]
+        if self.player.rect.bottom>=self.lava_y:
+            self.game_over=True
+        if self.player.rect.top<=self.top_y-20:
+            self.won=True
+
+    def draw(self):
+        self.screen.fill(BG)
+        for p in self.platforms:
+            dr = p.move(0, -int(self.cam_y))
+            if p.type == PLATFORM_CRUMBLING:
+                shake = 0
+                if p.crumble_timer > 0:
+                    shake = (p.crumble_timer % 4) - 2
+                dr = dr.move(shake, 0)
+                color = PLATFORM_COLOR_CRUMBLING
+            elif p.type == PLATFORM_SPRING:
+                color = PLATFORM_COLOR_SPRING
+            else:
+                color = PLATFORM_COLOR
+            pygame.draw.rect(self.screen, color, dr, border_radius=4)
+        self.player.draw(self.screen,self.cam_y)
+        draw_lava(self.screen,self.lava_y,self.cam_y,WIDTH,HEIGHT,self.frame)
+        sc=self.font.render(f"Height: {self.score}m  R=Restart",True,(220,200,180))
+        self.screen.blit(sc,(8,10))
+        # Danger meter
+        danger = min(1.0, self.lava_rise / 1.2)
+        bar_w = 200
+        bar_h = 14
+        bar_x, bar_y = 8, 34
+        fill_w = int(bar_w * danger)
+        danger_color = (255 - int(255 * danger), int(255 * danger), 0)
+        if self.surge_active:
+            danger_color = (255, 0, 0)
+        pygame.draw.rect(self.screen, (60, 60, 60), (bar_x, bar_y, bar_w, bar_h))
+        pygame.draw.rect(self.screen, danger_color, (bar_x, bar_y, fill_w, bar_h))
+        pygame.draw.rect(self.screen, (200, 200, 200), (bar_x, bar_y, bar_w, bar_h), 1)
+        dm = self.font.render("DANGER", True, (200, 200, 200))
+        self.screen.blit(dm, (bar_x + bar_w + 8, bar_y - 2))
+        if self.surge_active:
+            sm = self.font.render("LAVA SURGE!", True, (255, 50, 50))
+            self.screen.blit(sm, (WIDTH // 2 - sm.get_width() // 2, 8))
+        if self.game_over:
+            self._msg("LAVA GOT YOU!",(220,80,40))
+        if self.won:
+            self._msg("ESCAPED!",(80,220,100))
+        pygame.display.flip()
+
+    def _msg(self,text,color):
+        ov=pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA)
+        ov.fill((0,0,0,150))
+        self.screen.blit(ov,(0,0))
+        m=self.big_font.render(text,True,color)
+        s=self.font.render("Press R to Play Again",True,(200,200,200))
+        self.screen.blit(m,(WIDTH//2-m.get_width()//2,HEIGHT//2-40))
+        self.screen.blit(s,(WIDTH//2-s.get_width()//2,HEIGHT//2+20))
+
+    def run(self):
+        running=True
+        while running:
+            running=self.handle_events()
+            self.update()
+            self.draw()
+            self.clock.tick(FPS)
+        pygame.quit()
